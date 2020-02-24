@@ -1,8 +1,6 @@
 const bodyParser = require(`body-parser`);
 const express = require("express");
 const cors = require("cors");
-const sha256 = require(`sha256`);
-const jwt = require(`jsonwebtoken`);
 const {
   CNN,
   ActivationFunction,
@@ -10,7 +8,7 @@ const {
   NetworkArchitectures
 } = require(`../CNN-js/cnn`);
 
-const checkAuth = require(`authCheck`);
+const { checkAuth, userExists } = require(`./auth/authCheck`);
 var app = express();
 
 //app.use(bodyParser.urlencoded({ extended:false }))
@@ -22,6 +20,9 @@ var neural_networks = {};
 app.post("/createCnn", checkAuth, (req, res) => {
   const neuralNet = new CNN(NetworkArchitectures.LeNet5);
   const net_id = new Date().getTime();
+  console.log(req.query);
+  neuralNet.name = req.query.name || net_id;
+  neuralNet.id = net_id;
 
   if (neural_networks[req.userId])
     neural_networks[req.userId][net_id] = neuralNet;
@@ -51,25 +52,29 @@ app.get(`/setParameter/:netId`, checkAuth, (req, res) => {
 });
 
 app.get(`/getNetworks`, checkAuth, (req, res) => {
-  if (neural_networks[req.userId])
-    res.send(Object.keys(neural_networks[req.userId]));
-  else res.send([]);
+  const props = (req.query.props && JSON.parse(req.query.props)) || [
+    "name",
+    "id",
+    "shape"
+  ]; // wich properties of each network should it return
+
+  if (neural_networks[req.userId]) {
+    const outObject = {};
+
+    Object.keys(neural_networks[req.userId]).forEach(id => {
+      const out = {};
+      props.forEach(prop => {
+        out[prop] = neural_networks[req.userId][id][prop];
+      });
+      outObject[id] = out;
+    });
+    res.send(outObject);
+  } else res.send([]);
 });
 
 app.post(`/login`, (req, res) => {
   if (req.body.user && req.body.pass) {
-    let hashPass = sha256(req.body.pass);
-    let authUser = users.find(
-      u => u.user === req.body.user && u.pass === hashPass
-    );
-    console.log(authUser);
-    if (authUser)
-      res.send({
-        token: jwt.sign({ userId: authUser.userId }, JWTsecret, {
-          expiresIn: `1 week`
-        })
-      });
-    else res.send({ err: `invalid username or password` });
+    res.send(userExists(req.body.user, req.body.pass));
   } else {
     console.log(req.body);
     res.send({ err: `username and password required` });
