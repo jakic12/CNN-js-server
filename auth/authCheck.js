@@ -1,3 +1,6 @@
+const sha256 = require(`sha256`);
+const jwt = require(`jsonwebtoken`);
+
 class User {
   constructor(username, password) {
     this.user = username;
@@ -5,8 +8,8 @@ class User {
     this.userId = sha256(`${this.user}${password}${new Date()}`);
   }
 }
-
 var users = [new User(`jakob`, `test`)];
+
 var JWTsecret = `dosijpoiJUS{)D9uf09iu32-03-0}_)@($#}-03i9jg]f0-9i3)`;
 
 const checkAuth = (req, res, next) => {
@@ -23,4 +26,16 @@ const checkAuth = (req, res, next) => {
   next();
 };
 
-module.exports = checkAuth;
+const userExists = (user, pass) => {
+  let hashPass = sha256(pass);
+  let authUser = users.find(u => u.user === user && u.pass === hashPass);
+  if (authUser)
+    return {
+      token: jwt.sign({ userId: authUser.userId }, JWTsecret, {
+        expiresIn: `1 week`
+      })
+    };
+  else return { err: `invalid username or password` };
+};
+
+module.exports = { checkAuth, userExists };
